@@ -1,0 +1,615 @@
+openapi: 3.1.1
+info:
+  title: Antifraud Demo Backend API
+  description: |
+    This API provides financial transaction services with integrated fraud detection capabilities.
+    
+    ## Features
+    - User authentication with JWT tokens
+    - Card management and lookups
+    - Money transfers with real-time fraud detection
+    - Transaction history tracking
+    
+    ## Authentication
+    Most endpoints require authentication using a JWT Bearer token. 
+    After logging in via `/login`, include the token in the `Authorization` header:
+    ```
+    Authorization: Bearer <your-token-here>
+    ```
+    
+    ## Fraud Detection
+    All transfer operations are automatically analyzed for fraud risk. The system computes
+    a fraud score (0.0 to 1.0) and may block suspicious transactions.
+  version: 1.0.0
+  contact:
+    name: API Support
+  license:
+    name: Apache 2.0
+    url: https://www.apache.org/licenses/LICENSE-2.0.html
+
+servers:
+  - url: http://localhost:8080
+    description: Local development server
+  - url: http://0.0.0.0:8080
+    description: Docker container server
+
+tags:
+  - name: Authentication
+    description: User authentication and session management
+  - name: Cards
+    description: Card management and lookup operations
+  - name: Transfers
+    description: Money transfer operations with fraud detection
+
+paths:
+  /login:
+    post:
+      tags:
+        - Authentication
+      summary: User login
+      description: |
+        Authenticates a user and returns a JWT token for subsequent requests.
+        The endpoint also records login session information including device metadata
+        (phone model and OS) which is used for fraud detection analysis.
+      operationId: loginUser
+      parameters:
+        - name: X-Phone-Model
+          in: header
+          description: Device phone model (e.g., "iPhone 14 Pro", "Samsung Galaxy S23")
+          required: false
+          schema:
+            type: string
+            example: "iPhone 14 Pro"
+        - name: X-OS
+          in: header
+          description: Operating system version (e.g., "iOS 16.5", "Android 13")
+          required: false
+          schema:
+            type: string
+            example: "iOS 16.5"
+      requestBody:
+        description: User credentials for authentication
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/LoginRequest'
+            examples:
+              validLogin:
+                summary: Valid user login
+                value:
+                  id: "user123"
+      responses:
+        '200':
+          description: Login successful
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/LoginResponse'
+              examples:
+                success:
+                  summary: Successful login
+                  value:
+                    token: "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9..."
+        '400':
+          description: Bad request - Missing or invalid user ID
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+              examples:
+                missingId:
+                  summary: Missing user ID
+                  value:
+                    error: "missing id"
+                invalidBody:
+                  summary: Invalid request body
+                  value:
+                    error: "invalid request body"
+        '404':
+          description: User not found
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+              examples:
+                userNotFound:
+                  summary: User doesn't exist
+                  value:
+                    error: "user not found"
+        '500':
+          description: Internal server error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+              examples:
+                sessionError:
+                  summary: Failed to save session
+                  value:
+                    error: "failed to save session"
+
+  /cards:
+    get:
+      tags:
+        - Cards
+      summary: List user's cards
+      description: |
+        Retrieves all cards associated with the authenticated user.
+        Returns card details including balance and status (active/blocked).
+      operationId: listCards
+      security:
+        - BearerAuth: []
+      responses:
+        '200':
+          description: Successfully retrieved list of cards
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/CardListResponse'
+              examples:
+                multipleCards:
+                  summary: User with multiple cards
+                  value:
+                    cards:
+                      - id: "123e4567-e89b-12d3-a456-426614174000"
+                        user_id: "user123"
+                        number: "4111111111111111"
+                        balance: 1500.50
+                        status: "active"
+                      - id: "123e4567-e89b-12d3-a456-426614174001"
+                        user_id: "user123"
+                        number: "4222222222222222"
+                        balance: 500.00
+                        status: "blocked"
+                emptyList:
+                  summary: User with no cards
+                  value:
+                    cards: []
+        '401':
+          description: Unauthorized - Missing or invalid token
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+              examples:
+                unauthorized:
+                  summary: Authentication failed
+                  value:
+                    error: "unauthorized"
+        '500':
+          description: Internal server error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+              examples:
+                dbError:
+                  summary: Database error
+                  value:
+                    error: "failed to list cards"
+
+  /cards/lookup:
+    get:
+      tags:
+        - Cards
+      summary: Lookup card by number
+      description: |
+        Retrieves card information by card number. This is useful for validating
+        recipient card details before initiating a transfer.
+      operationId: lookupCard
+      security:
+        - BearerAuth: []
+      parameters:
+        - name: n
+          in: query
+          description: Card number to lookup
+          required: true
+          schema:
+            type: string
+            pattern: '^\d{16}$'
+            example: "4111111111111111"
+      responses:
+        '200':
+          description: Card found successfully
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/CardLookupResponse'
+              examples:
+                success:
+                  summary: Card found
+                  value:
+                    id: "123e4567-e89b-12d3-a456-426614174000"
+                    number: "4111111111111111"
+                    user_id: "user123"
+        '400':
+          description: Bad request - Missing card number
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+              examples:
+                missingNumber:
+                  summary: Card number not provided
+                  value:
+                    error: "missing card number"
+        '401':
+          description: Unauthorized - Missing or invalid token
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '404':
+          description: Card not found
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+              examples:
+                notFound:
+                  summary: Card doesn't exist
+                  value:
+                    error: "card not found"
+
+  /transfer:
+    post:
+      tags:
+        - Transfers
+      summary: Execute a money transfer
+      description: |
+        Initiates a money transfer from one card to another with automatic fraud detection.
+        
+        ## Fraud Detection Process
+        1. Analyzes user's login session history
+        2. Computes behavioral features (login patterns, device changes, etc.)
+        3. Calculates fraud probability score (0.0 = safe, 1.0 = definitely fraud)
+        4. Automatically blocks high-risk transactions
+        
+        ## Transaction States
+        - **Not Blocked (is_blocked: false)**: Transfer is processed successfully
+        - **Blocked (is_blocked: true)**: Transfer is flagged as fraudulent and prevented
+        
+        The fraud score is always returned to help understand the risk assessment.
+      operationId: createTransfer
+      security:
+        - BearerAuth: []
+      requestBody:
+        description: Transfer details
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/TransferRequest'
+            examples:
+              normalTransfer:
+                summary: Standard transfer
+                value:
+                  from_card_id: "123e4567-e89b-12d3-a456-426614174000"
+                  to_card_id: "123e4567-e89b-12d3-a456-426614174001"
+                  amount: 100.50
+              largeTransfer:
+                summary: Large amount transfer
+                value:
+                  from_card_id: "123e4567-e89b-12d3-a456-426614174000"
+                  to_card_id: "987e6543-e21b-12d3-a456-426614174099"
+                  amount: 5000.00
+      responses:
+        '200':
+          description: Transfer processed (may be blocked if fraudulent)
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/TransferResponse'
+              examples:
+                successfulTransfer:
+                  summary: Legitimate transfer approved
+                  value:
+                    id: "987e6543-e21b-12d3-a456-426614174099"
+                    from_user_id: "user123"
+                    from_card_id: "123e4567-e89b-12d3-a456-426614174000"
+                    to_card_id: "123e4567-e89b-12d3-a456-426614174001"
+                    amount: 100.50
+                    when: "2025-11-24T10:30:00Z"
+                    fraud_score: 0.15
+                    is_blocked: false
+                blockedTransfer:
+                  summary: Suspicious transfer blocked
+                  value:
+                    id: "987e6543-e21b-12d3-a456-426614174100"
+                    from_user_id: "user123"
+                    from_card_id: "123e4567-e89b-12d3-a456-426614174000"
+                    to_card_id: "987e6543-e21b-12d3-a456-426614174099"
+                    amount: 5000.00
+                    when: "2025-11-24T10:35:00Z"
+                    fraud_score: 0.89
+                    is_blocked: true
+        '400':
+          description: Bad request - Invalid input data
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+              examples:
+                invalidBody:
+                  summary: Malformed JSON
+                  value:
+                    error: "invalid request body"
+                invalidFromCard:
+                  summary: Invalid source card UUID
+                  value:
+                    error: "invalid from_card_id"
+                invalidToCard:
+                  summary: Invalid destination card UUID
+                  value:
+                    error: "invalid to_card_id"
+                predictorError:
+                  summary: Fraud prediction failed
+                  value:
+                    error: "failed to call predictor"
+        '401':
+          description: Unauthorized - Missing or invalid token
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '500':
+          description: Internal server error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+              examples:
+                sessionError:
+                  summary: Failed to retrieve session data
+                  value:
+                    error: "failed to get sessions"
+                persistError:
+                  summary: Failed to save transfer
+                  value:
+                    error: "failed to persist transfer"
+
+  /transfers:
+    get:
+      tags:
+        - Transfers
+      summary: List user's transfers
+      description: |
+        Retrieves all transfers where the authenticated user is the sender.
+        Results include both successful and blocked transactions with their fraud scores.
+      operationId: listTransfers
+      security:
+        - BearerAuth: []
+      responses:
+        '200':
+          description: Successfully retrieved transfer history
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/TransferListResponse'
+              examples:
+                withTransfers:
+                  summary: User with transfer history
+                  value:
+                    transfers:
+                      - id: "987e6543-e21b-12d3-a456-426614174099"
+                        from_user_id: "user123"
+                        from_card_id: "123e4567-e89b-12d3-a456-426614174000"
+                        to_card_id: "123e4567-e89b-12d3-a456-426614174001"
+                        amount: 100.50
+                        when: "2025-11-24T10:30:00Z"
+                        fraud_score: 0.15
+                        is_blocked: false
+                      - id: "987e6543-e21b-12d3-a456-426614174100"
+                        from_user_id: "user123"
+                        from_card_id: "123e4567-e89b-12d3-a456-426614174000"
+                        to_card_id: "987e6543-e21b-12d3-a456-426614174099"
+                        amount: 5000.00
+                        when: "2025-11-24T10:35:00Z"
+                        fraud_score: 0.89
+                        is_blocked: true
+                emptyList:
+                  summary: No transfers yet
+                  value:
+                    transfers: []
+        '401':
+          description: Unauthorized - Missing or invalid token
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '500':
+          description: Internal server error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+              examples:
+                dbError:
+                  summary: Database error
+                  value:
+                    error: "failed to list transfers"
+
+components:
+  securitySchemes:
+    BearerAuth:
+      type: http
+      scheme: bearer
+      bearerFormat: JWT
+      description: |
+        JWT token obtained from the `/login` endpoint.
+        The token expires after 24 hours and contains user identification
+        and device metadata used for fraud detection.
+
+  schemas:
+    LoginRequest:
+      type: object
+      required:
+        - id
+      properties:
+        id:
+          type: string
+          description: Unique user identifier
+          example: "user123"
+          minLength: 1
+
+    LoginResponse:
+      type: object
+      properties:
+        token:
+          type: string
+          description: JWT Bearer token for authentication (valid for 24 hours)
+          example: "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJ1c2VyX2lkIjoidXNlcjEyMyIsImV4cCI6MTczMjU0MDgwMCwiaWF0IjoxNzMyNDU0NDAwLCJuYmYiOjE3MzI0NTQ0MDAsInN1YiI6InVzZXIxMjMiLCJwaG9uZV9tb2RlbCI6ImlQaG9uZSAxNCBQcm8iLCJvcyI6ImlPUyAxNi41In0.xxx"
+
+    CardDTO:
+      type: object
+      properties:
+        id:
+          type: string
+          format: uuid
+          description: Unique card identifier
+          example: "123e4567-e89b-12d3-a456-426614174000"
+        user_id:
+          type: string
+          description: Owner's user ID
+          example: "user123"
+        number:
+          type: string
+          description: Card number (typically 16 digits)
+          pattern: '^\d{16}$'
+          example: "4111111111111111"
+        balance:
+          type: number
+          format: double
+          description: Current card balance
+          minimum: 0
+          example: 1500.50
+        status:
+          type: string
+          enum:
+            - active
+            - blocked
+          description: |
+            Card status:
+            - `active`: Card is operational and can be used for transfers
+            - `blocked`: Card is suspended and cannot be used
+          example: "active"
+
+    CardListResponse:
+      type: object
+      properties:
+        cards:
+          type: array
+          items:
+            $ref: '#/components/schemas/CardDTO'
+          description: List of cards belonging to the user
+
+    CardLookupResponse:
+      type: object
+      properties:
+        id:
+          type: string
+          format: uuid
+          description: Unique card identifier
+          example: "123e4567-e89b-12d3-a456-426614174000"
+        number:
+          type: string
+          description: Card number
+          pattern: '^\d{16}$'
+          example: "4111111111111111"
+        user_id:
+          type: string
+          description: Card owner's user ID
+          example: "user123"
+
+    TransferRequest:
+      type: object
+      required:
+        - from_card_id
+        - to_card_id
+        - amount
+      properties:
+        from_card_id:
+          type: string
+          format: uuid
+          description: Source card UUID (must belong to authenticated user)
+          example: "123e4567-e89b-12d3-a456-426614174000"
+        to_card_id:
+          type: string
+          format: uuid
+          description: Destination card UUID
+          example: "123e4567-e89b-12d3-a456-426614174001"
+        amount:
+          type: number
+          format: double
+          description: Transfer amount (must be positive)
+          minimum: 0.01
+          example: 100.50
+
+    TransferResponse:
+      type: object
+      properties:
+        id:
+          type: string
+          format: uuid
+          description: Unique transfer identifier
+          example: "987e6543-e21b-12d3-a456-426614174099"
+        from_user_id:
+          type: string
+          description: Sender's user ID
+          example: "user123"
+        from_card_id:
+          type: string
+          format: uuid
+          description: Source card UUID
+          example: "123e4567-e89b-12d3-a456-426614174000"
+        to_card_id:
+          type: string
+          format: uuid
+          description: Destination card UUID
+          example: "123e4567-e89b-12d3-a456-426614174001"
+        amount:
+          type: number
+          format: double
+          description: Transfer amount
+          example: 100.50
+        when:
+          type: string
+          format: date-time
+          description: Transfer timestamp (RFC3339 format)
+          example: "2025-11-24T10:30:00Z"
+        fraud_score:
+          type: number
+          format: double
+          description: |
+            Fraud probability score (0.0 to 1.0):
+            - 0.0 - 0.3: Low risk
+            - 0.3 - 0.7: Medium risk
+            - 0.7 - 1.0: High risk
+          minimum: 0.0
+          maximum: 1.0
+          example: 0.15
+        is_blocked:
+          type: boolean
+          description: |
+            Whether the transfer was blocked due to fraud detection:
+            - `false`: Transfer was processed successfully
+            - `true`: Transfer was blocked as fraudulent
+          example: false
+
+    TransferListResponse:
+      type: object
+      properties:
+        transfers:
+          type: array
+          items:
+            $ref: '#/components/schemas/TransferResponse'
+          description: List of transfers initiated by the user
+
+    ErrorResponse:
+      type: object
+      properties:
+        error:
+          type: string
+          description: Human-readable error message
+          example: "invalid request body"
