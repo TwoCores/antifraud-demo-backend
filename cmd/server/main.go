@@ -41,6 +41,7 @@ func main() {
 
 	mux.HandleFunc("POST /login", internal.LoginHandler)
 
+	mux.Handle("GET /users/me", auth.AuthMiddleware(http.HandlerFunc(internal.GetUsersMeHandler)))
 	mux.Handle("GET /cards", auth.AuthMiddleware(http.HandlerFunc(internal.ListCardsHandler)))
 	mux.Handle("GET /cards/lookup", auth.AuthMiddleware(http.HandlerFunc(internal.GetCardByNumberHandler)))
 	mux.Handle("POST /transfer", auth.AuthMiddleware(http.HandlerFunc(internal.DoTransferHandler)))

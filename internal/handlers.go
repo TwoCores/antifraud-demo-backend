@@ -59,6 +59,31 @@ func LoginHandler(w http.ResponseWriter, r *http.Request) {
 	_ = json.NewEncoder(w).Encode(LoginResponse{Token: tok})
 }
 
+func GetUsersMeHandler(w http.ResponseWriter, r *http.Request) {
+	w.Header().Set("Content-Type", "application/json")
+
+	claims, ok := jwtClaimsFromContext(r)
+	if !ok {
+		w.WriteHeader(http.StatusUnauthorized)
+		json.NewEncoder(w).Encode(ErrorResponse{Error: "unauthorized"})
+		return
+	}
+
+	user, err := dbClient.GetUserByID(claims.UserId)
+	if err != nil {
+		w.WriteHeader(http.StatusNotFound)
+		json.NewEncoder(w).Encode(ErrorResponse{Error: "user not found"})
+		return
+	}
+
+	_ = json.NewEncoder(w).Encode(UserDTO{
+		ID:        user.ID,
+		FirstName: user.FirstName,
+		LastName:  user.LastName,
+		Status:    string(user.Status),
+	})
+}
+
 func ListCardsHandler(w http.ResponseWriter, r *http.Request) {
 	w.Header().Set("Content-Type", "application/json")
 

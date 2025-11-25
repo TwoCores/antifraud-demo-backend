@@ -8,6 +8,13 @@ type LoginResponse struct {
 	Token string `json:"token"`
 }
 
+type UserDTO struct {
+	ID        string `json:"id"`
+	FirstName string `json:"first_name"`
+	LastName  string `json:"last_name"`
+	Status    string `json:"status"`
+}
+
 type CardDTO struct {
 	ID      string  `json:"id"`
 	UserID  string  `json:"user_id"`
