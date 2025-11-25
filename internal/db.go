@@ -30,11 +30,6 @@ func (db *DB) GetUserByID(id string) (*User, error) {
 	return &user, nil
 }
 
-func (db *DB) EnsureUser(u *User) error {
-	_, err := db.conn.Exec(`INSERT INTO users (id, first_name, last_name, status) VALUES ($1,$2,$3,$4) ON CONFLICT (id) DO UPDATE SET first_name=EXCLUDED.first_name,last_name=EXCLUDED.last_name,status=EXCLUDED.status`, u.ID, u.FirstName, u.LastName, u.Status)
-	return err
-}
-
 func (db *DB) SaveSession(s *LoginSession) error {
 	_, err := db.conn.Exec(`INSERT INTO login_sessions (user_id, when_ts, phone_model, os) VALUES ($1,$2,$3,$4)`, s.UserID, s.When, s.PhoneModel, s.OS)
 	return err
