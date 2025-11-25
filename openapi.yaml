@@ -36,6 +36,8 @@ servers:
 tags:
   - name: Authentication
     description: User authentication and session management
+  - name: Users
+    description: User profile and account information
   - name: Cards
     description: Card management and lookup operations
   - name: Transfers
@@ -128,6 +130,62 @@ paths:
                   summary: Failed to save session
                   value:
                     error: "failed to save session"
+
+  /users/me:
+    get:
+      tags:
+        - Users
+      summary: Get current user profile
+      description: |
+        Retrieves the profile information for the currently authenticated user.
+        Returns user details including name and account status.
+      operationId: getUsersMe
+      security:
+        - BearerAuth: []
+      responses:
+        '200':
+          description: Successfully retrieved user profile
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/UserDTO'
+              examples:
+                activeUser:
+                  summary: Active user profile
+                  value:
+                    id: "user123"
+                    first_name: "John"
+                    last_name: "Doe"
+                    status: "active"
+                blockedUser:
+                  summary: Blocked user profile
+                  value:
+                    id: "user456"
+                    first_name: "Jane"
+                    last_name: "Smith"
+                    status: "blocked"
+        '401':
+          description: Unauthorized - Missing or invalid token
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+              examples:
+                unauthorized:
+                  summary: Authentication failed
+                  value:
+                    error: "unauthorized"
+        '404':
+          description: User not found
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+              examples:
+                notFound:
+                  summary: User doesn't exist
+                  value:
+                    error: "user not found"
 
   /cards:
     get:
@@ -605,6 +663,32 @@ components:
           items:
             $ref: '#/components/schemas/TransferResponse'
           description: List of transfers initiated by the user
+
+    UserDTO:
+      type: object
+      properties:
+        id:
+          type: string
+          description: Unique user identifier
+          example: "user123"
+        first_name:
+          type: string
+          description: User's first name
+          example: "John"
+        last_name:
+          type: string
+          description: User's last name
+          example: "Doe"
+        status:
+          type: string
+          enum:
+            - active
+            - blocked
+          description: |
+            User account status:
+            - `active`: Account is operational and can perform transactions
+            - `blocked`: Account is suspended
+          example: "active"
 
     ErrorResponse:
       type: object
