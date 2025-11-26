@@ -1,6 +1,8 @@
 package internal
 
 import (
+	"time"
+
 	"github.com/jmoiron/sqlx"
 	_ "github.com/lib/pq"
 )
@@ -98,4 +100,70 @@ func (db *DB) ListAllLoginSessionsByUser(userId string) ([]*LoginSession, error)
 	out := make([]*LoginSession, 0)
 	err := db.conn.Select(&out, `SELECT id, user_id, when_ts as when, phone_model, os FROM login_sessions WHERE user_id=$1`, userId)
 	return out, err
+}
+
+// TODO: well, it works, but needs some refactoring
+type TransferAnalytics struct {
+	TotalTransfers   int                         `json:"total_transfers"`
+	BlockedTransfers int                         `json:"blocked_transfers"`
+	DailyStats       []TransferAnalyticsDayStats `json:"daily_stats"`
+}
+
+type TransferAnalyticsDayStats struct {
+	Date       string `json:"date"`
+	Total      int    `json:"total"`
+	Blocked    int    `json:"blocked"`
+	Successful int    `json:"successful"`
+}
+
+func (db *DB) GetTransferAnalytics(start, end *time.Time) (*TransferAnalytics, error) {
+	var total, blocked int
+	var args []interface{}
+	var where string
+	if start != nil && end != nil {
+		where = "WHERE when_ts >= $1 AND when_ts <= $2"
+		args = append(args, *start, *end)
+	} else if start != nil {
+		where = "WHERE when_ts >= $1"
+		args = append(args, *start)
+	} else if end != nil {
+		where = "WHERE when_ts <= $1"
+		args = append(args, *end)
+	}
+
+	totalQuery := "SELECT COUNT(*) FROM transfers " + where
+	if err := db.conn.Get(&total, totalQuery, args...); err != nil {
+		return nil, err
+	}
+
+	blockedQuery := "SELECT COUNT(*) FROM transfers " + where
+	if where == "" {
+		blockedQuery += " WHERE is_blocked=true"
+	} else {
+		blockedQuery += " AND is_blocked=true"
+	}
+	if err := db.conn.Get(&blocked, blockedQuery, args...); err != nil {
+		return nil, err
+	}
+
+	dailyStats := []TransferAnalyticsDayStats{}
+	dailyQuery := `SELECT DATE(when_ts) as date, COUNT(*) as total, SUM(CASE WHEN is_blocked THEN 1 ELSE 0 END) as blocked, SUM(CASE WHEN NOT is_blocked THEN 1 ELSE 0 END) as successful FROM transfers ` + where + ` GROUP BY DATE(when_ts) ORDER BY DATE(when_ts)`
+	rows, err := db.conn.Queryx(dailyQuery, args...)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	for rows.Next() {
+		var stat TransferAnalyticsDayStats
+		if err := rows.Scan(&stat.Date, &stat.Total, &stat.Blocked, &stat.Successful); err != nil {
+			return nil, err
+		}
+		dailyStats = append(dailyStats, stat)
+	}
+
+	return &TransferAnalytics{
+		TotalTransfers:   total,
+		BlockedTransfers: blocked,
+		DailyStats:       dailyStats,
+	}, nil
 }

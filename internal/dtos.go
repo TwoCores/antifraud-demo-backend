@@ -64,6 +64,19 @@ type TransferListResponse struct {
 	Transfers []TransferDTO `json:"transfers"`
 }
 
+type TransferAnalyticsDayStatsDTO struct {
+	Date       string `json:"date"`
+	Total      int    `json:"total"`
+	Blocked    int    `json:"blocked"`
+	Successful int    `json:"successful"`
+}
+
+type TransferAnalyticsResponse struct {
+	TotalTransfers   int                            `json:"total_transfers"`
+	BlockedTransfers int                            `json:"blocked_transfers"`
+	DailyStats       []TransferAnalyticsDayStatsDTO `json:"daily_stats"`
+}
+
 type ErrorResponse struct {
 	Error string `json:"error"`
 }

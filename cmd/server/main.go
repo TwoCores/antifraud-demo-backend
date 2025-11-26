@@ -66,6 +66,11 @@ func main() {
 			http.HandlerFunc(internal.ListTransfersByUserHandler),
 		),
 	))
+	mux.Handle("GET /admin/analytics/transfers", auth.AuthMiddleware(
+		auth.RequireSuperuserMiddleware(
+			http.HandlerFunc(internal.AnalyticsTransfersHandler),
+		),
+	))
 
 	host := fmt.Sprintf("0.0.0.0:%d", port)
 

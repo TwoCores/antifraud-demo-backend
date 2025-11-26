@@ -3,6 +3,7 @@ package internal
 import (
 	"encoding/json"
 	"net/http"
+	"time"
 )
 
 func ListUsersHandler(w http.ResponseWriter, r *http.Request) {
@@ -91,4 +92,45 @@ func ListTransfersByUserHandler(w http.ResponseWriter, r *http.Request) {
 	}
 
 	_ = json.NewEncoder(w).Encode(TransferListResponse{Transfers: transferDTOs})
+}
+
+// TODO: refactor
+func AnalyticsTransfersHandler(w http.ResponseWriter, r *http.Request) {
+	w.Header().Set("Content-Type", "application/json")
+
+	var startPtr, endPtr *time.Time
+	startStr := r.URL.Query().Get("start")
+	endStr := r.URL.Query().Get("end")
+	if startStr != "" {
+		if t, err := time.Parse("2006-01-02", startStr); err == nil {
+			startPtr = &t
+		}
+	}
+	if endStr != "" {
+		if t, err := time.Parse("2006-01-02", endStr); err == nil {
+			endPtr = &t
+		}
+	}
+
+	stats, err := dbClient.GetTransferAnalytics(startPtr, endPtr)
+	if err != nil {
+		w.WriteHeader(http.StatusInternalServerError)
+		json.NewEncoder(w).Encode(ErrorResponse{Error: "failed to get analytics"})
+		return
+	}
+
+	dailyStats := make([]TransferAnalyticsDayStatsDTO, len(stats.DailyStats))
+	for i, s := range stats.DailyStats {
+		dailyStats[i].Date = s.Date
+		dailyStats[i].Total = s.Total
+		dailyStats[i].Blocked = s.Blocked
+		dailyStats[i].Successful = s.Successful
+	}
+
+	resp := TransferAnalyticsResponse{
+		TotalTransfers:   stats.TotalTransfers,
+		BlockedTransfers: stats.BlockedTransfers,
+		DailyStats:       dailyStats,
+	}
+	_ = json.NewEncoder(w).Encode(resp)
 }
