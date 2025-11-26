@@ -83,7 +83,7 @@ func LoginSUHandler(w http.ResponseWriter, r *http.Request) {
 		json.NewEncoder(w).Encode(ErrorResponse{Error: "invalid credentials"})
 		return
 	}
-	if bcrypt.CompareHashAndPassword([]byte(req.Password), []byte(su.PasswordHash)) == nil {
+	if !(bcrypt.CompareHashAndPassword([]byte(su.PasswordHash), []byte(req.Password)) == nil) {
 		w.WriteHeader(http.StatusUnauthorized)
 		json.NewEncoder(w).Encode(ErrorResponse{Error: "invalid credentials"})
 		return
