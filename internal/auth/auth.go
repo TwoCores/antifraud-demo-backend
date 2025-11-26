@@ -3,7 +3,6 @@ package auth
 import (
 	"context"
 	"fmt"
-	"net/http"
 	"strings"
 	"time"
 
@@ -27,19 +26,42 @@ func init() {
 func GenerateToken(uid string, phoneModel, osStr string) (string, error) {
 	now := time.Now()
 	claims := &JwtClaims{
-		UserId:     uid,
-		ExpiresAt:  now.Add(24 * time.Hour).Unix(),
-		IssuedAt:   now.Unix(),
-		NotBefore:  now.Unix(),
-		Subject:    uid,
-		PhoneModel: phoneModel,
-		OS:         osStr,
+		UserId:      uid,
+		IsSuperuser: false,
+		ExpiresAt:   now.Add(24 * time.Hour).Unix(),
+		IssuedAt:    now.Unix(),
+		NotBefore:   now.Unix(),
+		Subject:     uid,
+		PhoneModel:  phoneModel,
+		OS:          osStr,
 	}
+
 	token := jwt.NewWithClaims(jwt.SigningMethodHS256, claims)
 	signed, err := token.SignedString(signingKey)
 	if err != nil {
 		return "", err
 	}
+
+	return signed, nil
+}
+
+func GenerateSUToken(uid string) (string, error) {
+	now := time.Now()
+	claims := &JwtClaims{
+		UserId:      uid,
+		IsSuperuser: true,
+		ExpiresAt:   now.Add(12 * time.Hour).Unix(),
+		IssuedAt:    now.Unix(),
+		NotBefore:   now.Unix(),
+		Subject:     uid,
+	}
+
+	token := jwt.NewWithClaims(jwt.SigningMethodHS256, claims)
+	signed, err := token.SignedString(signingKey)
+	if err != nil {
+		return "", err
+	}
+
 	return signed, nil
 }
 
@@ -72,24 +94,4 @@ func ValidateToken(ctx context.Context, tokenString string) (context.Context, bo
 
 	ctx = context.WithValue(ctx, CtxKeyClaims, claims)
 	return ctx, true, nil
-}
-
-func AuthMiddleware(next http.Handler) http.Handler {
-	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		token := r.Header.Get("Authorization")
-		if token == "" {
-			http.Error(w, "missing Authorization", http.StatusUnauthorized)
-			return
-		}
-		ctx, ok, err := ValidateToken(r.Context(), token)
-		if err != nil {
-			http.Error(w, "invalid token: "+err.Error(), http.StatusUnauthorized)
-			return
-		}
-		if !ok {
-			http.Error(w, "invalid token", http.StatusUnauthorized)
-			return
-		}
-		next.ServeHTTP(w, r.WithContext(ctx))
-	})
 }

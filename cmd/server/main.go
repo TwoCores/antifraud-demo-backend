@@ -39,13 +39,33 @@ func main() {
 
 	mux := http.NewServeMux()
 
+	// User login endpoints
 	mux.HandleFunc("POST /login", internal.LoginHandler)
+	mux.HandleFunc("POST /admin/login", internal.LoginSUHandler)
 
+	// User endpoints
 	mux.Handle("GET /users/me", auth.AuthMiddleware(http.HandlerFunc(internal.GetUsersMeHandler)))
 	mux.Handle("GET /cards", auth.AuthMiddleware(http.HandlerFunc(internal.ListCardsHandler)))
 	mux.Handle("GET /cards/lookup", auth.AuthMiddleware(http.HandlerFunc(internal.GetCardByNumberHandler)))
 	mux.Handle("POST /transfer", auth.AuthMiddleware(http.HandlerFunc(internal.DoTransferHandler)))
 	mux.Handle("GET /transfers", auth.AuthMiddleware(http.HandlerFunc(internal.ListTransfersHandler)))
+
+	// Superuser endpoints
+	mux.Handle("GET /admin/users", auth.AuthMiddleware(
+		auth.RequireSuperuserMiddleware(
+			http.HandlerFunc(internal.ListUsersHandler),
+		),
+	))
+	mux.Handle("GET /admin/users/cards", auth.AuthMiddleware(
+		auth.RequireSuperuserMiddleware(
+			http.HandlerFunc(internal.ListCardsByUserHandler),
+		),
+	))
+	mux.Handle("GET /admin/users/transfers", auth.AuthMiddleware(
+		auth.RequireSuperuserMiddleware(
+			http.HandlerFunc(internal.ListTransfersByUserHandler),
+		),
+	))
 
 	host := fmt.Sprintf("0.0.0.0:%d", port)
 

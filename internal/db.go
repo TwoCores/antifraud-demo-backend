@@ -30,6 +30,15 @@ func (db *DB) GetUserByID(id string) (*User, error) {
 	return &user, nil
 }
 
+func (db *DB) GetSuperuserByUsername(username string) (*Superuser, error) {
+	var su Superuser
+	err := db.conn.Get(&su, `SELECT id, username, password_hash FROM superusers WHERE username=$1`, username)
+	if err != nil {
+		return nil, err
+	}
+	return &su, nil
+}
+
 func (db *DB) SaveSession(s *LoginSession) error {
 	_, err := db.conn.Exec(`INSERT INTO login_sessions (user_id, when_ts, phone_model, os) VALUES ($1,$2,$3,$4)`, s.UserID, s.When, s.PhoneModel, s.OS)
 	return err
@@ -64,5 +73,29 @@ func (db *DB) SaveTransfer(t *Transfer) error {
 func (db *DB) ListTransfersForUser(userId string) ([]*Transfer, error) {
 	out := make([]*Transfer, 0)
 	err := db.conn.Select(&out, `SELECT id, from_user_id, from_card_id, to_card_id, amount, when_ts as when, fraud_score, is_blocked FROM transfers WHERE from_user_id=$1 ORDER BY when_ts DESC`, userId)
+	return out, err
+}
+
+func (db *DB) ListAllUsers() ([]*User, error) {
+	out := make([]*User, 0)
+	err := db.conn.Select(&out, `SELECT id, first_name, last_name, status FROM users`)
+	return out, err
+}
+
+func (db *DB) ListAllCardsByUser(userId string) ([]*Card, error) {
+	out := make([]*Card, 0)
+	err := db.conn.Select(&out, `SELECT id, user_id, number, balance, status FROM cards WHERE user_id=$1`, userId)
+	return out, err
+}
+
+func (db *DB) ListAllTransfersByUser(userId string) ([]*Transfer, error) {
+	out := make([]*Transfer, 0)
+	err := db.conn.Select(&out, `SELECT id, from_user_id, from_card_id, to_card_id, amount, when_ts as when, fraud_score, is_blocked FROM transfers WHERE from_user_id=$1`, userId)
+	return out, err
+}
+
+func (db *DB) ListAllLoginSessionsByUser(userId string) ([]*LoginSession, error) {
+	out := make([]*LoginSession, 0)
+	err := db.conn.Select(&out, `SELECT id, user_id, when_ts as when, phone_model, os FROM login_sessions WHERE user_id=$1`, userId)
 	return out, err
 }

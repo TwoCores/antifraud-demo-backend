@@ -53,3 +53,9 @@ type Transfer struct {
 	FraudScore float64   `json:"fraud_score" db:"fraud_score"`
 	IsBlocked  bool      `json:"is_blocked" db:"is_blocked"`
 }
+
+type Superuser struct {
+	ID           uuid.UUID `json:"id" db:"id"`
+	Username     string    `json:"username" db:"username"`
+	PasswordHash string    `json:"-" db:"password_hash"`
+}

@@ -8,6 +8,7 @@ import (
 	"antifraud-demo-backend/internal/auth"
 
 	"github.com/google/uuid"
+	"golang.org/x/crypto/bcrypt"
 )
 
 var (
@@ -32,7 +33,6 @@ func LoginHandler(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// Look up existing user
 	user, err := dbClient.GetUserByID(req.ID)
 	if err != nil {
 		w.WriteHeader(http.StatusNotFound)
@@ -56,13 +56,50 @@ func LoginHandler(w http.ResponseWriter, r *http.Request) {
 	}
 
 	tok, _ := auth.GenerateToken(user.ID, pm, os)
-	_ = json.NewEncoder(w).Encode(LoginResponse{Token: tok})
+	_ = json.NewEncoder(w).Encode(LoginResponse{
+		Token:       tok,
+		IsSuperuser: false,
+	})
+}
+
+func LoginSUHandler(w http.ResponseWriter, r *http.Request) {
+	w.Header().Set("Content-Type", "application/json")
+
+	var req SuperuserLoginRequest
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		w.WriteHeader(http.StatusBadRequest)
+		json.NewEncoder(w).Encode(ErrorResponse{Error: "invalid request body"})
+		return
+	}
+	if req.Username == "" || req.Password == "" {
+		w.WriteHeader(http.StatusBadRequest)
+		json.NewEncoder(w).Encode(ErrorResponse{Error: "missing username or password"})
+		return
+	}
+
+	su, err := dbClient.GetSuperuserByUsername(req.Username)
+	if err != nil {
+		w.WriteHeader(http.StatusUnauthorized)
+		json.NewEncoder(w).Encode(ErrorResponse{Error: "invalid credentials"})
+		return
+	}
+	if bcrypt.CompareHashAndPassword([]byte(req.Password), []byte(su.PasswordHash)) == nil {
+		w.WriteHeader(http.StatusUnauthorized)
+		json.NewEncoder(w).Encode(ErrorResponse{Error: "invalid credentials"})
+		return
+	}
+
+	tok, _ := auth.GenerateSUToken(su.ID.String())
+	_ = json.NewEncoder(w).Encode(LoginResponse{
+		Token:       tok,
+		IsSuperuser: true,
+	})
 }
 
 func GetUsersMeHandler(w http.ResponseWriter, r *http.Request) {
 	w.Header().Set("Content-Type", "application/json")
 
-	claims, ok := jwtClaimsFromContext(r)
+	claims, ok := auth.JwtClaimsFromContext(r)
 	if !ok {
 		w.WriteHeader(http.StatusUnauthorized)
 		json.NewEncoder(w).Encode(ErrorResponse{Error: "unauthorized"})
@@ -87,7 +124,7 @@ func GetUsersMeHandler(w http.ResponseWriter, r *http.Request) {
 func ListCardsHandler(w http.ResponseWriter, r *http.Request) {
 	w.Header().Set("Content-Type", "application/json")
 
-	claims, ok := jwtClaimsFromContext(r)
+	claims, ok := auth.JwtClaimsFromContext(r)
 	if !ok {
 		w.WriteHeader(http.StatusUnauthorized)
 		json.NewEncoder(w).Encode(ErrorResponse{Error: "unauthorized"})
@@ -142,7 +179,7 @@ func GetCardByNumberHandler(w http.ResponseWriter, r *http.Request) {
 func DoTransferHandler(w http.ResponseWriter, r *http.Request) {
 	w.Header().Set("Content-Type", "application/json")
 
-	claims, ok := jwtClaimsFromContext(r)
+	claims, ok := auth.JwtClaimsFromContext(r)
 	if !ok {
 		w.WriteHeader(http.StatusUnauthorized)
 		json.NewEncoder(w).Encode(ErrorResponse{Error: "unauthorized"})
@@ -200,7 +237,7 @@ func DoTransferHandler(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	_ = json.NewEncoder(w).Encode(TransferResponse{
+	_ = json.NewEncoder(w).Encode(TransferDTO{
 		ID:         t.ID.String(),
 		FromUserID: t.FromUserID,
 		FromCardID: t.FromCardID.String(),
@@ -215,7 +252,7 @@ func DoTransferHandler(w http.ResponseWriter, r *http.Request) {
 func ListTransfersHandler(w http.ResponseWriter, r *http.Request) {
 	w.Header().Set("Content-Type", "application/json")
 
-	claims, ok := jwtClaimsFromContext(r)
+	claims, ok := auth.JwtClaimsFromContext(r)
 	if !ok {
 		w.WriteHeader(http.StatusUnauthorized)
 		json.NewEncoder(w).Encode(ErrorResponse{Error: "unauthorized"})
@@ -229,9 +266,9 @@ func ListTransfersHandler(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	transferDTOs := make([]TransferResponse, len(list))
+	transferDTOs := make([]TransferDTO, len(list))
 	for i, t := range list {
-		transferDTOs[i] = TransferResponse{
+		transferDTOs[i] = TransferDTO{
 			ID:         t.ID.String(),
 			FromUserID: t.FromUserID,
 			FromCardID: t.FromCardID.String(),

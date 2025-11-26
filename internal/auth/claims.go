@@ -7,7 +7,8 @@ import (
 )
 
 type JwtClaims struct {
-	UserId string `json:"user_id,omitempty"`
+	UserId      string `json:"user_id,omitempty"`
+	IsSuperuser bool   `json:"is_superuser,omitempty"`
 
 	ExpiresAt int64    `json:"exp,omitempty"`
 	IssuedAt  int64    `json:"iat,omitempty"`
