@@ -798,6 +798,87 @@ paths:
                   summary: Database error
                   value:
                     error: "failed to list transfers"
+  /admin/analytics/transfers:
+    get:
+      tags:
+        - Admin
+      summary: Get transfer analytics
+      description: |
+        Returns aggregated analytics for all money transfers in the system. Only available to superusers (admins).
+        
+        - **total_transfers**: Total number of transfers in the period (or all time if not specified)
+        - **blocked_transfers**: Number of blocked (fraudulent) transfers
+        - **daily_stats**: Per-day breakdown of successful and blocked transfers
+      operationId: getTransferAnalytics
+      security:
+        - BearerAuth: []
+      parameters:
+        - name: start
+          in: query
+          description: Start date (inclusive) in YYYY-MM-DD format. Optional.
+          required: false
+          schema:
+            type: string
+            format: date
+            example: "2025-11-01"
+        - name: end
+          in: query
+          description: End date (inclusive) in YYYY-MM-DD format. Optional.
+          required: false
+          schema:
+            type: string
+            format: date
+            example: "2025-11-26"
+      responses:
+        '200':
+          description: Successfully retrieved transfer analytics
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/TransferAnalyticsResponse'
+              examples:
+                analytics:
+                  summary: Example analytics response
+                  value:
+                    total_transfers: 100
+                    blocked_transfers: 7
+                    daily_stats:
+                      - date: "2025-11-24"
+                        total: 10
+                        blocked: 1
+                        successful: 9
+                      - date: "2025-11-25"
+                        total: 15
+                        blocked: 2
+                        successful: 13
+        '401':
+          description: Unauthorized - Missing or invalid token
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '403':
+          description: Forbidden - Requires superuser privileges
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+              examples:
+                notSuperuser:
+                  summary: Non-superuser access attempt
+                  value:
+                    error: "superuser access required"
+        '500':
+          description: Internal server error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+              examples:
+                dbError:
+                  summary: Database error
+                  value:
+                    error: "failed to get analytics"
 
 components:
   securitySchemes:
@@ -1030,6 +1111,43 @@ components:
             - `active`: Account is operational and can perform transactions
             - `blocked`: Account is suspended
           example: "active"
+    
+    TransferAnalyticsDayStatsDTO:
+      type: object
+      properties:
+        date:
+          type: string
+          format: date
+          description: Date (YYYY-MM-DD)
+          example: "2025-11-24"
+        total:
+          type: integer
+          description: Total number of transfers on this day
+          example: 10
+        blocked:
+          type: integer
+          description: Number of blocked (fraudulent) transfers on this day
+          example: 1
+        successful:
+          type: integer
+          description: Number of successful (not blocked) transfers on this day
+          example: 9
+    TransferAnalyticsResponse:
+      type: object
+      properties:
+        total_transfers:
+          type: integer
+          description: Total number of transfers in the period
+          example: 100
+        blocked_transfers:
+          type: integer
+          description: Number of blocked (fraudulent) transfers in the period
+          example: 7
+        daily_stats:
+          type: array
+          items:
+            $ref: '#/components/schemas/TransferAnalyticsDayStatsDTO'
+          description: Per-day breakdown of transfers
 
     ErrorResponse:
       type: object
