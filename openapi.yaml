@@ -42,8 +42,78 @@ tags:
     description: Card management and lookup operations
   - name: Transfers
     description: Money transfer operations with fraud detection
+  - name: Admin
+    description: Administrative endpoints for superusers
 
 paths:
+  /admin/login:
+    post:
+      tags:
+        - Authentication
+      summary: Superuser login
+      description: |
+        Authenticates a superuser (admin) and returns a JWT token with elevated privileges.
+        This endpoint is used by administrators to access privileged endpoints.
+      operationId: loginSuperuser
+      requestBody:
+        description: Superuser credentials for authentication
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/SuperuserLoginRequest'
+            examples:
+              validLogin:
+                summary: Valid superuser login
+                value:
+                  username: "admin"
+                  password: "securepassword"
+      responses:
+        '200':
+          description: Login successful
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/SuperuserLoginResponse'
+              examples:
+                success:
+                  summary: Successful superuser login
+                  value:
+                    token: "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9..."
+                    is_superuser: true
+        '400':
+          description: Bad request - Missing or invalid credentials
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+              examples:
+                missingCredentials:
+                  summary: Missing username or password
+                  value:
+                    error: "missing username or password"
+                invalidBody:
+                  summary: Invalid request body
+                  value:
+                    error: "invalid request body"
+        '401':
+          description: Unauthorized - Invalid credentials
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+              examples:
+                invalidCredentials:
+                  summary: Invalid username or password
+                  value:
+                    error: "invalid credentials"
+        '500':
+          description: Internal server error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+
   /login:
     post:
       tags:
@@ -488,6 +558,247 @@ paths:
                   value:
                     error: "failed to list transfers"
 
+  /admin/users:
+    get:
+      tags:
+        - Admin
+      summary: List all users
+      description: |
+        Retrieves a list of all users in the system. This endpoint is restricted to superusers only.
+        Returns user details including name and account status for all users.
+      operationId: listAllUsers
+      security:
+        - BearerAuth: []
+      responses:
+        '200':
+          description: Successfully retrieved list of all users
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/UserListResponse'
+              examples:
+                multipleUsers:
+                  summary: List of users
+                  value:
+                    users:
+                      - id: "user123"
+                        first_name: "John"
+                        last_name: "Doe"
+                        status: "active"
+                      - id: "user456"
+                        first_name: "Jane"
+                        last_name: "Smith"
+                        status: "blocked"
+                emptyList:
+                  summary: No users found
+                  value:
+                    users: []
+        '401':
+          description: Unauthorized - Missing or invalid token
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '403':
+          description: Forbidden - Requires superuser privileges
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+              examples:
+                notSuperuser:
+                  summary: Non-superuser access attempt
+                  value:
+                    error: "superuser access required"
+        '500':
+          description: Internal server error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+              examples:
+                dbError:
+                  summary: Database error
+                  value:
+                    error: "failed to list users"
+
+  /admin/users/cards:
+    get:
+      tags:
+        - Admin
+      summary: List cards by user
+      description: |
+        Retrieves all cards for a specific user. This endpoint is restricted to superusers only.
+        Returns card details including balance and status for the specified user.
+      operationId: listCardsByUser
+      security:
+        - BearerAuth: []
+      parameters:
+        - name: userId
+          in: query
+          description: User ID to retrieve cards for
+          required: true
+          schema:
+            type: string
+            example: "user123"
+      responses:
+        '200':
+          description: Successfully retrieved list of cards for the user
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/CardListResponse'
+              examples:
+                multipleCards:
+                  summary: User with multiple cards
+                  value:
+                    cards:
+                      - id: "123e4567-e89b-12d3-a456-426614174000"
+                        user_id: "user123"
+                        number: "4111111111111111"
+                        balance: 1500.50
+                        status: "active"
+                      - id: "123e4567-e89b-12d3-a456-426614174001"
+                        user_id: "user123"
+                        number: "4222222222222222"
+                        balance: 500.00
+                        status: "blocked"
+                emptyList:
+                  summary: User with no cards
+                  value:
+                    cards: []
+        '400':
+          description: Bad request - Missing user ID
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+              examples:
+                missingUserId:
+                  summary: User ID not provided
+                  value:
+                    error: "missing user id"
+        '401':
+          description: Unauthorized - Missing or invalid token
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '403':
+          description: Forbidden - Requires superuser privileges
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+              examples:
+                notSuperuser:
+                  summary: Non-superuser access attempt
+                  value:
+                    error: "superuser access required"
+        '500':
+          description: Internal server error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+              examples:
+                dbError:
+                  summary: Database error
+                  value:
+                    error: "failed to list cards"
+
+  /admin/users/transfers:
+    get:
+      tags:
+        - Admin
+      summary: List transfers by user
+      description: |
+        Retrieves all transfers for a specific user where they are the sender. 
+        This endpoint is restricted to superusers only.
+        Returns transfer details including fraud scores and blocked status.
+      operationId: listTransfersByUser
+      security:
+        - BearerAuth: []
+      parameters:
+        - name: userId
+          in: query
+          description: User ID to retrieve transfers for
+          required: true
+          schema:
+            type: string
+            example: "user123"
+      responses:
+        '200':
+          description: Successfully retrieved list of transfers for the user
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/TransferListResponse'
+              examples:
+                withTransfers:
+                  summary: User with transfer history
+                  value:
+                    transfers:
+                      - id: "987e6543-e21b-12d3-a456-426614174099"
+                        from_user_id: "user123"
+                        from_card_id: "123e4567-e89b-12d3-a456-426614174000"
+                        to_card_id: "123e4567-e89b-12d3-a456-426614174001"
+                        amount: 100.50
+                        when: "2025-11-24T10:30:00Z"
+                        fraud_score: 0.15
+                        is_blocked: false
+                      - id: "987e6543-e21b-12d3-a456-426614174100"
+                        from_user_id: "user123"
+                        from_card_id: "123e4567-e89b-12d3-a456-426614174000"
+                        to_card_id: "987e6543-e21b-12d3-a456-426614174099"
+                        amount: 5000.00
+                        when: "2025-11-24T10:35:00Z"
+                        fraud_score: 0.89
+                        is_blocked: true
+                emptyList:
+                  summary: No transfers yet
+                  value:
+                    transfers: []
+        '400':
+          description: Bad request - Missing user ID
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+              examples:
+                missingUserId:
+                  summary: User ID not provided
+                  value:
+                    error: "missing user id"
+        '401':
+          description: Unauthorized - Missing or invalid token
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '403':
+          description: Forbidden - Requires superuser privileges
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+              examples:
+                notSuperuser:
+                  summary: Non-superuser access attempt
+                  value:
+                    error: "superuser access required"
+        '500':
+          description: Internal server error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+              examples:
+                dbError:
+                  summary: Database error
+                  value:
+                    error: "failed to list transfers"
+
 components:
   securitySchemes:
     BearerAuth:
@@ -511,6 +822,24 @@ components:
           example: "user123"
           minLength: 1
 
+    SuperuserLoginRequest:
+      type: object
+      required:
+        - username
+        - password
+      properties:
+        username:
+          type: string
+          description: Superuser username
+          example: "admin"
+          minLength: 1
+        password:
+          type: string
+          description: Superuser password
+          format: password
+          example: "securepassword"
+          minLength: 1
+
     LoginResponse:
       type: object
       properties:
@@ -518,6 +847,18 @@ components:
           type: string
           description: JWT Bearer token for authentication (valid for 24 hours)
           example: "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJ1c2VyX2lkIjoidXNlcjEyMyIsImV4cCI6MTczMjU0MDgwMCwiaWF0IjoxNzMyNDU0NDAwLCJuYmYiOjE3MzI0NTQ0MDAsInN1YiI6InVzZXIxMjMiLCJwaG9uZV9tb2RlbCI6ImlQaG9uZSAxNCBQcm8iLCJvcyI6ImlPUyAxNi41In0.xxx"
+
+    SuperuserLoginResponse:
+      type: object
+      properties:
+        token:
+          type: string
+          description: JWT Bearer token for authentication (valid for 24 hours)
+          example: "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9..."
+        is_superuser:
+          type: boolean
+          description: Indicates whether the authenticated user is a superuser
+          example: true
 
     CardDTO:
       type: object
