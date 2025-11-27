@@ -200,7 +200,13 @@ func DoTransferHandler(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	feats := ComputeFeatures(claims.UserId, sessions, time.Now().UTC())
+	feats := &ModelFeatures{
+		// CstDimID: claims.UserId,
+		Amount:   req.Amount,
+		// TODO: it's not encrypted
+		Direction: req.ToCardID,
+	}
+	ComputeFeatures(feats, sessions, time.Now().UTC())
 
 	pr, err := PredictFraud(feats)
 	if err != nil {

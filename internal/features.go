@@ -6,11 +6,7 @@ import (
 	"time"
 )
 
-func ComputeFeatures(userID string, sessions []*LoginSession, transdate time.Time) *ModelFeatures {
-	req := &ModelFeatures{
-		CstDimID: userID,
-	}
-
+func ComputeFeatures(feats *ModelFeatures, sessions []*LoginSession, transdate time.Time) *ModelFeatures {
 	prev := make([]*LoginSession, 0)
 	for _, s := range sessions {
 		if s.When.Before(transdate) || s.When.Equal(transdate) {
@@ -19,13 +15,13 @@ func ComputeFeatures(userID string, sessions []*LoginSession, transdate time.Tim
 	}
 
 	if len(prev) == 0 {
-		return req
+		return feats
 	}
 
 	sort.Slice(prev, func(i, j int) bool { return prev[i].When.Before(prev[j].When) })
 	last := prev[len(prev)-1]
-	req.LastPhoneModelCategorical = last.PhoneModel
-	req.LastOSCategorical = last.OS
+	feats.LastPhoneModelCategorical = last.PhoneModel
+	feats.LastOSCategorical = last.OS
 
 	cutoff7 := transdate.Add(-7 * 24 * time.Hour)
 	cutoff30 := transdate.Add(-30 * 24 * time.Hour)
@@ -46,24 +42,24 @@ func ComputeFeatures(userID string, sessions []*LoginSession, transdate time.Tim
 		}
 	}
 
-	req.MonthlyPhoneModelChanges = len(phoneModels30)
-	req.MonthlyOSChanges = len(os30)
-	req.LoginsLast7Days = logins7
-	req.LoginsLast30Days = logins30
+	feats.MonthlyPhoneModelChanges = len(phoneModels30)
+	feats.MonthlyOSChanges = len(os30)
+	feats.LoginsLast7Days = logins7
+	feats.LoginsLast30Days = logins30
 
 	if logins7 > 0 {
-		req.LoginFrequency7d = float64(logins7) / 7.0
+		feats.LoginFrequency7d = float64(logins7) / 7.0
 	}
 	if logins30 > 0 {
-		req.LoginFrequency30d = float64(logins30) / 30.0
+		feats.LoginFrequency30d = float64(logins30) / 30.0
 	}
 
-	if req.LoginFrequency30d != 0 {
-		req.FreqChange7dVsMean = (req.LoginFrequency7d - req.LoginFrequency30d) / req.LoginFrequency30d
+	if feats.LoginFrequency30d != 0 {
+		feats.FreqChange7dVsMean = (feats.LoginFrequency7d - feats.LoginFrequency30d) / feats.LoginFrequency30d
 	}
 
 	if logins30 != 0 {
-		req.Logins7dOver30dRatio = float64(logins7) / float64(logins30)
+		feats.Logins7dOver30dRatio = float64(logins7) / float64(logins30)
 	}
 
 	if len(times30) >= 2 {
@@ -85,9 +81,9 @@ func ComputeFeatures(userID string, sessions []*LoginSession, transdate time.Tim
 		}
 		variance := varSum / float64(len(intervals))
 		std := math.Sqrt(variance)
-		req.AvgLoginInterval30d = mean
-		req.StdLoginInterval30d = std
-		req.VarLoginInterval30d = variance
+		feats.AvgLoginInterval30d = mean
+		feats.StdLoginInterval30d = std
+		feats.VarLoginInterval30d = variance
 
 		var ewm float64
 		alpha := 0.3
@@ -104,15 +100,15 @@ func ComputeFeatures(userID string, sessions []*LoginSession, transdate time.Tim
 			}
 		}
 		if count > 0 {
-			req.EwmLoginInterval7d = ewm
+			feats.EwmLoginInterval7d = ewm
 		}
 
 		if mean+std != 0 {
-			req.BurstinessLoginInterval = (std - mean) / (std + mean)
+			feats.BurstinessLoginInterval = (std - mean) / (std + mean)
 		}
 
 		if mean != 0 {
-			req.FanoFactorLoginInterval = variance / mean
+			feats.FanoFactorLoginInterval = variance / mean
 		}
 
 		times7 := make([]time.Time, 0)
@@ -132,10 +128,10 @@ func ComputeFeatures(userID string, sessions []*LoginSession, transdate time.Tim
 			}
 			mean7 := sum7 / float64(len(ints7))
 			if std != 0 {
-				req.ZscoreAvgLoginInterval7d = (mean7 - mean) / std
+				feats.ZscoreAvgLoginInterval7d = (mean7 - mean) / std
 			}
 		}
 	}
 
-	return req
+	return feats
 }

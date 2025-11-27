@@ -24,11 +24,13 @@ func init() {
 }
 
 type ModelFeatures struct {
-	CstDimID                  string  `json:"cst_dim_id"`
+	// CstDimID                  string  `json:"cst_dim_id"`
+	Amount					  float64 `json:"amount"`
 	MonthlyOSChanges          int     `json:"monthly_os_changes"`
 	MonthlyPhoneModelChanges  int     `json:"monthly_phone_model_changes"`
 	LastPhoneModelCategorical string  `json:"last_phone_model_categorical"`
 	LastOSCategorical         string  `json:"last_os_categorical"`
+	Direction                 string  `json:"direction"`
 	LoginsLast7Days           int     `json:"logins_last_7_days"`
 	LoginsLast30Days          int     `json:"logins_last_30_days"`
 	LoginFrequency7d          float64 `json:"login_frequency_7d"`
